@@ -78,16 +78,16 @@ CREATE TABLE deals (
 id serial primary key,
 name varchar(50),
 deal_amount bigint default '0',
-company_id bigint unsigned not null,
-contact_id bigint unsigned not null,
-manager_id bigint unsigned not null,
-products_in_deal_1 bigint unsigned not null,
+company_id bigint unsigned,
+contact_id bigint unsigned,
+manager_id bigint unsigned,
+products_in_deal_1 bigint unsigned,
 qty_product_1 bigint,
-products_in_deal_2 bigint unsigned not null,
+products_in_deal_2 bigint unsigned,
 qty_product_2 bigint,
-products_in_deal_3 bigint unsigned not null,
+products_in_deal_3 bigint unsigned,
 qty_product_3 bigint,
-products_in_deal_4 bigint unsigned not null,
+products_in_deal_4 bigint unsigned,
 qty_product_4 bigint,
 stage enum('cold', 'pre-sale', 'analytics', 'testing', 'making decision', 'contract', 'canceled', 'paused') default 'cold',
 created_at datetime default current_timestamp,
@@ -1034,6 +1034,15 @@ join users u
 on d.manager_id = u.id
 ORDER by manager;
 
+-- Сделки старше 30 дней
+CREATE OR REPLACE VIEW deals_older_30_days AS 
+SELECT name, deal_amount, stage FROM deals where created_at <= DATE_SUB(NOW(), INTERVAL 30 DAY);
+
+-- Новые лиды (лиды за последнюю неделю)
+CREATE OR REPLACE VIEW new_leads AS
+SELECT name, stage, created_at FROM leads where created_at >= DATE_SUB(NOW(), INTERVAL 1 WEEK);
+
+
 
 
 -- ****** ТРИГГЕРЫ *******
@@ -1053,10 +1062,19 @@ insert into leads (id, name, company_name, contact_name, manager_id, created_at,
 
 
 -- ****** ПРОЦЕДУРЫ *******
--- Перевод из лида в сделку. Если обработка лида заканчивается статусом 'contract' должна автоматом создаваться сделка в таблице deals. 
+-- Перевод из лида в сделку. Если обработка лида заканчивается статусом 'contract' должны автоматом создаваться контакт(contact), компания(customer) и сделка(deals). 
 DROP PROCEDURE IF EXISTS lead_to_deal;
 CREATE PROCEDURE lead_to_deal
 BEGIN
+	INSERT INTO contacts (name, email, phone, manager_id, company_id)
+	SELECT contact_name, email, phone, manager_id, manager_id)
+	FROM leads WHERE stage='contract';
 	
+	INSERT INTO customer (company_name, email, phone, manager_id, contact_id)
+	SELECT company_name, email, phone, manager_id, contact_id
+	FROM leads WHERE stage='contract';
+
+	INSERT INTO deals (name, company_id, contact_id, manager_id)
+	SELECT name, company_name, contact_name, manager_id  
+	FROM leads WHERE stage='contract';
 END
--- проверка
